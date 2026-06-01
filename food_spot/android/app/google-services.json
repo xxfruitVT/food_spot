@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "929999561129",
+    "project_id": "foodo-42393",
+    "storage_bucket": "foodo-42393.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:929999561129:android:adcbe1d3fa1b9a6c4124b8",
+        "android_client_info": {
+          "package_name": "com.example.food_spo"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAPq-VjWq-U0ueH41nxKkgPrC4-8Xbb3cM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:929999561129:android:318a57a7836d3a614124b8",
+        "android_client_info": {
+          "package_name": "com.example.food_spot"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAPq-VjWq-U0ueH41nxKkgPrC4-8Xbb3cM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
