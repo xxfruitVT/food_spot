@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'home_screen.dart';
 import 'favorite_screen.dart';
-// import 'profile_screen.dart';
+import 'profile_screen.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   final int initialIndex;
@@ -18,7 +18,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   final List<Widget> pages = [
     const HomeScreen(),
     const FavoriteScreen(),
-    // const ProfileScreen(),
+    const ProfileScreen(),
   ];
 
   @override
