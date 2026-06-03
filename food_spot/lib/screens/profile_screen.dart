@@ -1,4 +1,6 @@
+import 'dart:convert'; // Ditambahkan untuk konversi Base64
 import 'dart:io';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -13,12 +15,14 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final user = FirebaseAuth.instance.currentUser;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   File? imageFile;
+  String? _photoBase64; // Menyimpan string base64 dari database
   final picker = ImagePicker();
 
-  // Mode status untuk perpindahan halaman edit (User Personalization)
   bool _isEditingMode = false;
+  bool _isLoading = true;
 
   // Controller untuk mengedit data text field
   final TextEditingController _nameController = TextEditingController();
@@ -29,14 +33,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
-    // Mengambil data awal dari Firebase Auth yang didapat saat Register
-    _nameController.text = user?.displayName ?? "Mark Johnson";
-    _emailController.text = user?.email ?? "mark.johnson@email.com";
-    _usernameController.text = "@markjohnson";
-    _bioController.text =
-        "Food lover | Traveler | Blogger 🩵\nSharing delicious experiences and recipes ❤️🔥";
+    _emailController.text = user?.email ?? "";
+    _loadUserData();
 
-    // Listener agar teks nama besar di atas ikut berubah secara real-time saat diketik
     _nameController.addListener(() {
       setState(() {});
     });
@@ -54,8 +53,93 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.dispose();
   }
 
+  void _showSnackBar(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
+    );
+  }
+
+  /// FUNGSI MENGAMBIL DATA DARI FIRESTORE (TERMASUK FOTO)
+  Future<void> _loadUserData() async {
+    if (user == null) return;
+
+    try {
+      DocumentSnapshot userDoc = await _firestore
+          .collection('users')
+          .doc(user!.uid)
+          .get();
+
+      if (userDoc.exists && userDoc.data() != null) {
+        Map<String, dynamic> data = userDoc.data() as Map<String, dynamic>;
+
+        _nameController.text =
+            data['fullName'] ?? user?.displayName ?? "Mark Johnson";
+        _usernameController.text = data['username'] ?? "@markjohnson";
+        _bioController.text =
+            data['bio'] ??
+            "Food lover | Traveler | Blogger 🩵\nSharing delicious experiences and recipes ❤️🔥";
+
+        // Ambil data foto yang tersimpan dalam bentuk string Base64
+        _photoBase64 = data['photoUrl'];
+      } else {
+        _nameController.text = user?.displayName ?? "Mark Johnson";
+        _usernameController.text = "@markjohnson";
+        _bioController.text =
+            "Food lover | Traveler | Blogger 🩵\nSharing delicious experiences and recipes ❤️🔥";
+      }
+    } catch (e) {
+      _showSnackBar("Gagal memuat data profil: $e");
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  /// FUNGSI MENYIMPAN DATA DATA + FOTO KE FIRESTORE
+  Future<void> _saveUserData() async {
+    if (user == null) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      await user!.updateDisplayName(_nameController.text);
+
+      // Jika ada file gambar baru yang dipilih secara lokal, konversikan dulu ke Base64 String
+      if (imageFile != null) {
+        List<int> imageBytes = await imageFile!.readAsBytes();
+        _photoBase64 = base64Encode(imageBytes);
+      }
+
+      // Simpan semua data secara sinkron ke Cloud Firestore
+      await _firestore.collection('users').doc(user!.uid).set({
+        'fullName': _nameController.text,
+        'username': _usernameController.text,
+        'email': _emailController.text,
+        'bio': _bioController.text,
+        'photoUrl': _photoBase64, // Menyimpan string gambar ke database
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      _showSnackBar("Profile updated successfully!");
+      setState(() => _isEditingMode = false);
+    } catch (e) {
+      _showSnackBar("Gagal menyimpan perubahan: $e");
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
   Future<void> pickImage(ImageSource source) async {
-    final picked = await picker.pickImage(source: source, imageQuality: 85);
+    final picked = await picker.pickImage(
+      source: source,
+      imageQuality: 60,
+    ); // image quality dikurangi sedikit agar ukuran string database ringan
     if (picked != null) {
       setState(() {
         imageFile = File(picked.path);
@@ -107,238 +191,253 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  /// HELPER UNTUK MENAMPILKAN GAMBAR (Lokal -> Database -> Placeholder)
+  ImageProvider _getProfileImage() {
+    if (imageFile != null) {
+      return FileImage(
+        imageFile!,
+      ); // Prioritas 1: Gambar baru yang baru saja di-pick user
+    } else if (_photoBase64 != null && _photoBase64!.isNotEmpty) {
+      return MemoryImage(
+        base64Decode(_photoBase64!),
+      ); // Prioritas 2: Gambar lama dari Firestore yang di-decode kembali
+    } else {
+      return const NetworkImage(
+        "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500", // Pasrah ke default jika kosong total
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
-        child: Column(
-          children: [
-            /// HEADER BAR (Tanpa Tombol Back, Posisi Judul Tetap di Tengah Rapi)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        child: _isLoading
+            ? const Center(
+                child: CircularProgressIndicator(color: Color(0xFF4DD0E1)),
+              )
+            : Column(
                 children: [
-                  // Spacer kiri berukuran sama dengan ukuran tombol settings (48) agar teks center
-                  const SizedBox(width: 48),
-
-                  Expanded(
-                    child: Center(
-                      child: Text(
-                        _isEditingMode ? "User personalization" : "Profile",
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black87,
+                  /// HEADER BAR
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const SizedBox(width: 48),
+                        Expanded(
+                          child: Center(
+                            child: Text(
+                              _isEditingMode
+                                  ? "User personalization"
+                                  : "Profile",
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black87,
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
+                        _isEditingMode
+                            ? const SizedBox(width: 48)
+                            : IconButton(
+                                icon: const Icon(
+                                  Icons.settings_outlined,
+                                  color: Colors.grey,
+                                ),
+                                onPressed: () {
+                                  setState(() => _isEditingMode = true);
+                                },
+                              ),
+                      ],
                     ),
                   ),
 
-                  _isEditingMode
-                      ? const SizedBox(
-                          width: 48,
-                        ) // Penyeimbang kanan saat mode edit aktif
-                      : IconButton(
-                          icon: const Icon(
-                            Icons.settings_outlined,
-                            color: Colors.grey,
-                          ),
-                          onPressed: () {
-                            setState(() => _isEditingMode = true);
-                          },
-                        ),
-                ],
-              ),
-            ),
-
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Column(
-                  children: [
-                    const SizedBox(height: 10),
-
-                    /// AVATAR DENGAN BADGE LEVEL DIGITAL "3"
-                    Center(
-                      child: Stack(
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Column(
                         children: [
+                          const SizedBox(height: 10),
+
+                          /// AVATAR
+                          Center(
+                            child: Stack(
+                              children: [
+                                GestureDetector(
+                                  onTap: showPicker,
+                                  child: Container(
+                                    height: 110,
+                                    width: 110,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: Colors.white,
+                                        width: 2,
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.08),
+                                          blurRadius: 15,
+                                          offset: const Offset(0, 5),
+                                        ),
+                                      ],
+                                      image: DecorationImage(
+                                        image:
+                                            _getProfileImage(), // Memanggil fungsi pengecekan gambar pintar
+                                        fit: BoxFit.cover,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const Positioned(
+                                  bottom: 2,
+                                  right: 2,
+                                  child: Icon(
+                                    Icons.circle,
+                                    size: 24,
+                                    color: Color(0xFF4DD0E1),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          const SizedBox(height: 16),
+
+                          /// TEXT NAMA & USERNAME UTAMA
+                          Text(
+                            _nameController.text.isEmpty
+                                ? "No Name"
+                                : _nameController.text,
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _usernameController.text.isEmpty
+                                ? "@username"
+                                : _usernameController.text,
+                            style: TextStyle(
+                              fontSize: 15,
+                              color: Colors.grey.shade400,
+                            ),
+                          ),
+
+                          const SizedBox(height: 32),
+
+                          /// FORM ENTRIES
+                          _buildInputField(
+                            label: "Full Name",
+                            controller: _nameController,
+                            enabled: _isEditingMode,
+                            showEditButton: !_isEditingMode,
+                            onEditPressed: () {
+                              setState(() => _isEditingMode = true);
+                            },
+                          ),
+                          const SizedBox(height: 20),
+
+                          _buildInputField(
+                            label: "Username",
+                            controller: _usernameController,
+                            enabled: _isEditingMode,
+                          ),
+                          const SizedBox(height: 20),
+
+                          if (!_isEditingMode) ...[
+                            _buildInputField(
+                              label: "Email",
+                              controller: _emailController,
+                              enabled: false,
+                            ),
+                            const SizedBox(height: 20),
+                          ],
+
+                          _buildInputField(
+                            label: "Bio",
+                            controller: _bioController,
+                            enabled: _isEditingMode,
+                            isBio: true,
+                          ),
+
+                          const SizedBox(height: 40),
+
+                          /// TOMBOL SAVE / LOGOUT
                           GestureDetector(
-                            onTap: showPicker,
+                            onTap: () async {
+                              if (_isEditingMode) {
+                                _saveUserData();
+                              } else {
+                                await FirebaseAuth.instance.signOut();
+                                if (!mounted) return;
+                                Navigator.pushAndRemoveUntil(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const LoginScreen(),
+                                  ),
+                                  (route) => false,
+                                );
+                              }
+                            },
                             child: Container(
-                              height: 110,
-                              width: 110,
+                              width: double.infinity,
+                              height: 55,
                               decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: Colors.white,
-                                  width: 2,
+                                borderRadius: BorderRadius.circular(16),
+                                gradient: LinearGradient(
+                                  colors: _isEditingMode
+                                      ? [
+                                          const Color(0xFFF77062),
+                                          const Color(0xFFFE5196),
+                                        ]
+                                      : [
+                                          const Color(0xFF00E5FF),
+                                          const Color(0xFF1976D2),
+                                        ],
+                                  begin: Alignment.centerLeft,
+                                  end: Alignment.centerRight,
                                 ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.black.withOpacity(0.08),
-                                    blurRadius: 15,
+                                    color:
+                                        (_isEditingMode
+                                                ? Colors.red
+                                                : Colors.cyan)
+                                            .withOpacity(0.25),
+                                    blurRadius: 12,
                                     offset: const Offset(0, 5),
                                   ),
                                 ],
-                                image: imageFile != null
-                                    ? DecorationImage(
-                                        image: FileImage(imageFile!),
-                                        fit: BoxFit.cover,
-                                      )
-                                    : const DecorationImage(
-                                        image: NetworkImage(
-                                          "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500",
-                                        ),
-                                        fit: BoxFit.cover,
-                                      ),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  _isEditingMode ? "Save Changes" : "Log Out",
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
                               ),
                             ),
                           ),
-                          Positioned(
-                            bottom: 2,
-                            right: 2,
-                            child: Container(
-                              padding: const EdgeInsets.all(7),
-                              decoration: const BoxDecoration(
-                                color: Color(0xFF4DD0E1),
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                          ),
+                          const SizedBox(height: 24),
                         ],
                       ),
                     ),
-
-                    const SizedBox(height: 16),
-
-                    /// TEXT NAMA & USERNAME UTAMA (DI ATAS FORM INPUT)
-                    Text(
-                      _nameController.text.isEmpty
-                          ? "No Name"
-                          : _nameController.text,
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _usernameController.text.isEmpty
-                          ? "@username"
-                          : _usernameController.text,
-                      style: TextStyle(
-                        fontSize: 15,
-                        color: Colors.grey.shade400,
-                      ),
-                    ),
-
-                    const SizedBox(height: 32),
-
-                    /// FORM ENTRIES (Nama, Username, Email, Bio)
-                    _buildInputField(
-                      label: "Full Name",
-                      controller: _nameController,
-                      enabled: _isEditingMode,
-                      showEditButton: !_isEditingMode,
-                      onEditPressed: () {
-                        setState(() => _isEditingMode = true);
-                      },
-                    ),
-                    const SizedBox(height: 20),
-
-                    _buildInputField(
-                      label: "Username",
-                      controller: _usernameController,
-                      enabled: _isEditingMode,
-                    ),
-                    const SizedBox(height: 20),
-
-                    if (!_isEditingMode) ...[
-                      _buildInputField(
-                        label: "Email",
-                        controller: _emailController,
-                        enabled: false,
-                      ),
-                      const SizedBox(height: 20),
-                    ],
-
-                    _buildInputField(
-                      label: "Bio",
-                      controller: _bioController,
-                      enabled: _isEditingMode,
-                      isBio: true,
-                    ),
-
-                    const SizedBox(height: 40),
-
-                    /// TOMBOL AKTIVITAS (LOG OUT ATAU SAVE CHANGES)
-                    GestureDetector(
-                      onTap: () async {
-                        if (_isEditingMode) {
-                          setState(() => _isEditingMode = false);
-                          _showSnackBar("Profile updated successfully!");
-                        } else {
-                          await FirebaseAuth.instance.signOut();
-                          if (!mounted) return;
-                          Navigator.pushAndRemoveUntil(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const LoginScreen(),
-                            ),
-                            (route) => false,
-                          );
-                        }
-                      },
-                      child: Container(
-                        width: double.infinity,
-                        height: 55,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          gradient: LinearGradient(
-                            colors: _isEditingMode
-                                ? [
-                                    const Color(0xFFF77062),
-                                    const Color(0xFFFE5196),
-                                  ]
-                                : [
-                                    const Color(0xFF00E5FF),
-                                    const Color(0xFF1976D2),
-                                  ],
-                            begin: Alignment.centerLeft,
-                            end: Alignment.centerRight,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: (_isEditingMode ? Colors.red : Colors.cyan)
-                                  .withOpacity(0.25),
-                              blurRadius: 12,
-                              offset: const Offset(0, 5),
-                            ),
-                          ],
-                        ),
-                        child: Center(
-                          child: Text(
-                            _isEditingMode ? "Save Changes" : "Log Out",
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -433,9 +532,5 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       ],
     );
-  }
-
-  void _showSnackBar(String text) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 }
