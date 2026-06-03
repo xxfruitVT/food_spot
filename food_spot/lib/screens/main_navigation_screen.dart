@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'home_screen.dart';
 import 'search_screen.dart';
+import 'add_food_screen.dart';
 import 'map_screen.dart';
 import 'favorite_screen.dart';
 import 'profile_screen.dart';
@@ -17,13 +18,14 @@ class MainNavigationScreen extends StatefulWidget {
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   late int currentIndex;
 
-  // Halaman MapScreen sekarang dipindah ke index 2 (tengah) jika ingin diakses via tombol tengah
+  // Daftar halaman berdasarkan urutan index IndexedStack
   final List<Widget> pages = [
-    const HomeScreen(),
-    const SearchScreen(),
-    const MapScreen(), // Halaman Map / Tambah Postingan
-    const FavoriteScreen(),
-    const ProfileScreen(),
+    const HomeScreen(), // index 0
+    const SearchScreen(), // index 1
+    const MapScreen(), // index 2
+    const AddFoodScreen(), // index 3 (Halaman khusus tombol "+")
+    const FavoriteScreen(), // index 4
+    const ProfileScreen(), // index 5
   ];
 
   @override
@@ -37,44 +39,43 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     return Scaffold(
       body: IndexedStack(index: currentIndex, children: pages),
 
-      /// TOMBOL "+" SEKARANG DI TENGAH
-      floatingActionButton: Container(
-        height: 64,
-        width: 64,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF43D4CF), Color(0xFF5B8DEF)],
-          ),
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF5B8DEF).withOpacity(0.4),
-              blurRadius: 12,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: FloatingActionButton(
-          onPressed: () {
-            // Aksi tombol tengah: Pindah ke MapScreen atau halaman postingan
-            setState(() {
-              currentIndex = 2;
-            });
-          },
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          highlightElevation: 0,
-          shape: const CircleBorder(),
-          child: const Icon(
-            Icons
-                .add_rounded, // Kamu bisa ganti ke Icons.location_on_rounded jika ini untuk Map
-            color: Colors.white,
-            size: 36,
-          ),
-        ),
-      ),
+      /// PERBAIKAN: Tombol "+" hanya dirender jika currentIndex == 0 (Hanya di HomeScreen)
+      floatingActionButton: currentIndex == 0
+          ? Container(
+              height: 64,
+              width: 64,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF43D4CF), Color(0xFF5B8DEF)],
+                ),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF5B8DEF).withOpacity(0.4),
+                    blurRadius: 12,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: FloatingActionButton(
+                onPressed: () {
+                  setState(() {
+                    currentIndex = 3; // Mengarah ke AddFoodScreen
+                  });
+                },
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                highlightElevation: 0,
+                shape: const CircleBorder(),
+                child: const Icon(
+                  Icons.add_rounded,
+                  color: Colors.white,
+                  size: 36,
+                ),
+              ),
+            )
+          : null, // Jika bukan di HomeScreen (index 0), tombol "+" disembunyikan (null)
 
-      // Mengubah lokasi FAB tepat di tengah-tengah bawah melayang
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
 
       bottomNavigationBar: Container(
@@ -93,18 +94,19 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         child: ClipRRect(
           borderRadius: BorderRadius.circular(24),
           child: BottomNavigationBar(
-            currentIndex: currentIndex == 2
-                ? 0
-                : currentIndex, // Highlight handling untuk tombol tengah
+            // Sinkronisasi highlight active icon di bottom bar
+            currentIndex: currentIndex == 3
+                ? 0 // Jika sedang di AddFoodScreen, hilangkan highlight sementara (kembali ke home)
+                : (currentIndex > 3 ? currentIndex - 1 : currentIndex),
             onTap: (index) {
-              // Jika user menekan item, sesuaikan indexnya agar melompati space tengah jika diperlukan
               setState(() {
-                if (index >= 2) {
-                  currentIndex =
-                      index +
-                      1; // Geser index karena posisi ke-2 diisi oleh tombol "+"
-                } else {
+                // SISI KIRI: Home (0), Search (1), Map (2) -> Cocok dengan index pages
+                if (index <= 2) {
                   currentIndex = index;
+                }
+                // SISI KANAN: Favorite (3), Profile (4) -> Harus ditambah 1 agar meloncat ke index 4 dan 5 di pages
+                else {
+                  currentIndex = index + 1;
                 }
               });
             },
@@ -125,15 +127,19 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                 icon: Icon(Icons.search_rounded, size: 28),
                 label: 'Search',
               ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.location_on_rounded, size: 28),
+                label: 'Map',
+              ),
 
               /// SISI KANAN
               BottomNavigationBarItem(
                 icon: Icon(Icons.favorite, size: 26),
-                label: 'Favorite',
+                label: 'Favorite', // Tombol ini di bar bernilai index 3
               ),
               BottomNavigationBarItem(
                 icon: Icon(Icons.person_outline_rounded, size: 28),
-                label: 'Profile',
+                label: 'Profile', // Tombol ini di bar bernilai index 4
               ),
             ],
           ),

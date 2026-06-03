@@ -1,3 +1,4 @@
+import 'dart:async'; // Ditambahkan untuk mendukung StreamSubscription (Real-time)
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -11,10 +12,13 @@ class MapScreen extends StatefulWidget {
 }
 
 class _MapScreenState extends State<MapScreen> {
-  // Koordinat default (Jakarta) jika GPS gagal didapatkan
+  // Koordinat default (Jakarta) jika GPS gagal didapatkan di awal
   LatLng _currentPosition = const LatLng(-6.2000, 106.8166);
   final MapController _mapController = MapController();
   bool _isLoading = true;
+
+  // Variabel untuk mengontrol dan mematikan tracking saat pindah halaman
+  StreamSubscription<Position>? _positionStreamSubscription;
 
   // Data tiruan restoran terdekat di sekitar koordinat user
   final List<Map<String, dynamic>> _nearByRestaurants = [
@@ -39,14 +43,22 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void initState() {
     super.initState();
-    _determinePosition();
+    _checkPermissionAndTrack();
   }
 
-  /// Fungsi Mendeteksi Lokasi GPS User
-  Future<void> _determinePosition() async {
+  // Membersihkan fungsi tracking ketika user keluar dari MapScreen agar baterai tidak boros
+  @override
+  void dispose() {
+    _positionStreamSubscription?.cancel();
+    super.dispose();
+  }
+
+  /// Fungsi Memeriksa Izin GPS dan Mengaktifkan Real-time Tracking
+  Future<void> _checkPermissionAndTrack() async {
     bool serviceEnabled;
     LocationPermission permission;
 
+    // 1. Cek apakah GPS di HP aktif
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       _showSnackBar("Layanan lokasi (GPS) Anda dinonaktifkan.");
@@ -54,6 +66,7 @@ class _MapScreenState extends State<MapScreen> {
       return;
     }
 
+    // 2. Cek izin akses lokasi aplikasi
     permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
@@ -70,17 +83,49 @@ class _MapScreenState extends State<MapScreen> {
       return;
     }
 
-    // Ambil posisi terkini
-    Position position = await Geolocator.getCurrentPosition();
-    if (!mounted) return;
+    // 3. Ambil posisi awal sekali agar peta langsung terbuka di lokasi user tanpa menunggu stream
+    try {
+      Position initialPosition = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
+      if (mounted) {
+        setState(() {
+          _currentPosition = LatLng(
+            initialPosition.latitude,
+            initialPosition.longitude,
+          );
+          _isLoading = false;
+        });
+        _mapController.move(_currentPosition, 15.0);
+      }
+    } catch (e) {
+      // Jika gagal mengambil posisi awal, matikan loading dan pakai koordinat default
+      setState(() => _isLoading = false);
+    }
 
-    setState(() {
-      _currentPosition = LatLng(position.latitude, position.longitude);
-      _isLoading = false;
-    });
+    // 4. AKTIFKAN PELACAKAN REAL-TIME (STREAM)
+    _positionStreamSubscription =
+        Geolocator.getPositionStream(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy
+                .high, // Akurasi tinggi menggunakan GPS hardware
+            distanceFilter:
+                3, // Update koordinat map setiap kali HP bergeser minimal 3 meter
+          ),
+        ).listen((Position position) {
+          if (!mounted) return;
 
-    // Geser kamera peta ke posisi user baru
-    _mapController.move(_currentPosition, 15.0);
+          setState(() {
+            // Update koordinat marker biru sesuai lokasi HP yang baru secara real-time
+            _currentPosition = LatLng(position.latitude, position.longitude);
+          });
+
+          // Buka komentar kode di bawah ini jika kamu ingin kamera peta otomatis
+          // ikut bergeser ke tengah (lock-center) setiap kali langkah kaki user bergerak:
+          // _mapController.move(_currentPosition, _mapController.camera.zoom);
+        });
   }
 
   void _showSnackBar(String text) {
@@ -110,10 +155,10 @@ class _MapScreenState extends State<MapScreen> {
                       userAgentPackageName: 'com.foodspot.app',
                     ),
 
-                    /// MARKER PIN MAKANAN (Sama seperti ikon toska di gambarmu)
+                    /// MARKER PIN (User & Restoran)
                     MarkerLayer(
                       markers: [
-                        // Marker posisi asli user
+                        // Marker posisi asli user (Pin biru ini akan bergerak real-time)
                         Marker(
                           point: _currentPosition,
                           width: 40,
@@ -213,7 +258,24 @@ class _MapScreenState extends State<MapScreen> {
             ),
           ),
 
-          /// 3. BOTTOM PANEL CARD ("NEAR YOU") - BISA DI-SLIDE ATAS/BAWAH
+          /// 3. TOMBOL SHORTCUT UNTUK MEMALIKKAN KAMERA KE LOKASI HP USER
+          Positioned(
+            right: 20,
+            bottom:
+                MediaQuery.of(context).size.height *
+                0.38, // Berada tepat di atas sheet slide bawah
+            child: FloatingActionButton(
+              mini: true,
+              backgroundColor: Colors.white,
+              onPressed: () {
+                // Ketika ditekan, peta langsung pindah dan fokus ke lokasi terbaru HP user
+                _mapController.move(_currentPosition, 16.0);
+              },
+              child: const Icon(Icons.gps_fixed, color: Color(0xFF4DD0E1)),
+            ),
+          ),
+
+          /// 4. BOTTOM PANEL CARD ("NEAR YOU") - BISA DI-SLIDE ATAS/BAWAH
           DraggableScrollableSheet(
             initialChildSize: 0.35,
             minChildSize: 0.15,
@@ -234,7 +296,6 @@ class _MapScreenState extends State<MapScreen> {
                     vertical: 12,
                   ),
                   children: [
-                    // Garis handle abu-abu kecil di atas sheet
                     Center(
                       child: Container(
                         width: 50,
@@ -255,8 +316,6 @@ class _MapScreenState extends State<MapScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
-
-                    // List Card Horizontal Restoran Terdekat
                     SizedBox(
                       height: 190,
                       child: ListView.builder(
