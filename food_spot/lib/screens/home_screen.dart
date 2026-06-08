@@ -1,9 +1,21 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:food_spot/screens/category_detail_screen.dart';
 import '../services/firestore_service.dart';
-import '../widgets/food_cart.dart';
-import 'add_food_screen.dart';
 import 'detail_screen.dart';
+
+// Model untuk data kategori
+class CategoryModel {
+  final String title;
+  final String description;
+  final String image;
+
+  CategoryModel({
+    required this.title,
+    required this.description,
+    required this.image,
+  });
+}
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -14,468 +26,230 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final service = FirestoreService();
-
-  /// SEARCH CONTROLLER
   final TextEditingController searchController = TextEditingController();
-
-  /// SEARCH VALUE
   String searchText = "";
 
-  /// CATEGORY
-  String selectedCategory = "All";
-
-  /// CATEGORY LIST
-  final List<String> categories = [
-    "All",
-    "Burger",
-    "Pizza",
-    "Noodle",
-    "Drink",
-    "Rice",
-    "Snack",
+  // Data kategori nyata
+  final List<CategoryModel> categories = [
+    CategoryModel(
+      title: "Restaurants",
+      description: "Temukan tempat makan terbaik",
+      image: "https://images.unsplash.com/photo-1552566626-52f8b828add9",
+    ),
+    CategoryModel(
+      title: "Bars & Cafe",
+      description: "Tempat nongkrong favorit",
+      image: "https://images.unsplash.com/photo-1514933651103-005eec06c04b",
+    ),
   ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: const Color(0xFFF9F9F9),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: service.getFoods(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-      /// FLOATING BUTTON
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: Colors.orange,
-        icon: const Icon(Icons.add, color: Colors.white),
+          var foods = snapshot.data?.docs ?? [];
+          var filteredFoods = foods.where((food) {
+            String name = food['name'].toString().toLowerCase();
+            return name.contains(searchText.toLowerCase());
+          }).toList();
 
-        label: const Text(
-          "Add Food",
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
+          return CustomScrollView(
+            slivers: [
+              // 1. Header Elegan dengan SliverAppBar
+              SliverAppBar(
+                expandedHeight: 200,
+                pinned: true,
+                centerTitle: true,
+                flexibleSpace: FlexibleSpaceBar(
+                  centerTitle: true,
+                  title: Text(
+                    "Home",
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      // PENYEBAB BUREM: Menggunakan warna dengan opasitas (Misalnya, putih kusam)
+                      color: Colors.white.withOpacity(0.6), // <--- Ubah di sini
+                    ),
+                  ),
+                  background: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Image.network(
+                        "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4",
+                        fit: BoxFit.cover,
+                      ),
+                      Container(color: Colors.black.withOpacity(0.3)),
+                    ],
+                  ),
+                ),
+              ),
 
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const AddFoodScreen()),
-          );
-        },
-      ),
-
-      body: SafeArea(
-        child: StreamBuilder<QuerySnapshot>(
-          stream: service.getFoods(),
-
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
-
-            /// ALL DATA
-            var foods = snapshot.data?.docs ?? [];
-
-            /// =========================
-            /// SEARCH FILTER
-            /// =========================
-            var filteredFoods = foods.where((food) {
-              String name = food['name'].toString().toLowerCase();
-
-              String category = food['category'].toString().toLowerCase();
-
-              /// SEARCH
-              bool matchSearch = name.contains(searchText.toLowerCase());
-
-              /// CATEGORY
-              bool matchCategory =
-                  selectedCategory == "All" ||
-                  category == selectedCategory.toLowerCase();
-
-              return matchSearch && matchCategory;
-            }).toList();
-
-            return SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-
-                children: [
-                  /// ======================
-                  /// HEADER
-                  /// ======================
-                  Padding(
-                    padding: const EdgeInsets.all(20),
-
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-
-                          children: const [
-                            Text(
-                              "Food Spot",
-                              style: TextStyle(
-                                fontSize: 30,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-
-                            SizedBox(height: 5),
-
-                            Text(
-                              "Discover delicious foods 🍔",
-                              style: TextStyle(color: Colors.grey),
+              // 2. Konten Utama
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    children: [
+                      // Search Bar
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(15),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 10,
                             ),
                           ],
                         ),
-
-                        Container(
-                          padding: const EdgeInsets.all(12),
-
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(18),
-
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.05),
-
-                                blurRadius: 10,
-                                offset: const Offset(0, 5),
-                              ),
-                            ],
-                          ),
-
-                          child: const Icon(Icons.person, color: Colors.orange),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  /// ======================
-                  /// SEARCH BAR
-                  /// ======================
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(18),
-
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.04),
-
-                            blurRadius: 10,
-                            offset: const Offset(0, 5),
-                          ),
-                        ],
-                      ),
-
-                      child: TextField(
-                        controller: searchController,
-
-                        onChanged: (value) {
-                          setState(() {
-                            searchText = value;
-                          });
-                        },
-
-                        decoration: InputDecoration(
-                          hintText: "Search food here...",
-
-                          prefixIcon: const Icon(Icons.search),
-
-                          suffixIcon: searchText.isNotEmpty
-                              ? IconButton(
-                                  onPressed: () {
-                                    searchController.clear();
-
-                                    setState(() {
-                                      searchText = "";
-                                    });
-                                  },
-
-                                  icon: const Icon(Icons.close),
-                                )
-                              : null,
-
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.all(18),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 25),
-
-                  /// ======================
-                  /// BANNER
-                  /// ======================
-                  Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 20),
-
-                    padding: const EdgeInsets.all(25),
-
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFFFF9800), Color(0xFFFFB74D)],
-                      ),
-
-                      borderRadius: BorderRadius.circular(30),
-
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.orange.withOpacity(0.3),
-
-                          blurRadius: 20,
-                          offset: const Offset(0, 10),
-                        ),
-                      ],
-                    ),
-
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-
-                            children: const [
-                              Text(
-                                "Today's Special",
-                                style: TextStyle(color: Colors.white70),
-                              ),
-
-                              SizedBox(height: 10),
-
-                              Text(
-                                "Find Your\nFavorite Food",
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 30,
-                                  fontWeight: FontWeight.bold,
-                                  height: 1.2,
-                                ),
-                              ),
-                            ],
+                        child: TextField(
+                          controller: searchController,
+                          onChanged: (val) => setState(() => searchText = val),
+                          decoration: const InputDecoration(
+                            hintText: "Cari makanan atau resto...",
+                            prefixIcon: Icon(Icons.search, color: Colors.cyan),
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.symmetric(vertical: 15),
                           ),
                         ),
-
-                        const Icon(
-                          Icons.fastfood,
-                          size: 90,
-                          color: Colors.white,
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 30),
-
-                  /// ======================
-                  /// CATEGORY TITLE
-                  /// ======================
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 20),
-
-                    child: Text(
-                      "Categories",
-                      style: TextStyle(
-                        fontSize: 23,
-                        fontWeight: FontWeight.bold,
                       ),
-                    ),
-                  ),
+                      const SizedBox(height: 25),
 
-                  const SizedBox(height: 15),
-
-                  /// ======================
-                  /// CATEGORY LIST
-                  /// ======================
-                  SizedBox(
-                    height: 50,
-
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-
-                      itemCount: categories.length,
-
-                      itemBuilder: (context, index) {
-                        String category = categories[index];
-
-                        bool isSelected = selectedCategory == category;
-
-                        return GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              selectedCategory = category;
-                            });
-                          },
-
-                          child: Container(
-                            margin: const EdgeInsets.only(right: 12),
-
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 12,
+                      // Grid Kategori
+                      GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: categories.length,
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              childAspectRatio: 0.8,
+                              crossAxisSpacing: 15,
                             ),
+                        itemBuilder: (context, index) =>
+                            _buildCategoryCard(categories[index]),
+                      ),
 
-                            decoration: BoxDecoration(
-                              color: isSelected ? Colors.orange : Colors.white,
-
-                              borderRadius: BorderRadius.circular(18),
-
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.04),
-
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 5),
-                                ),
-                              ],
-                            ),
-
-                            child: Text(
-                              category,
-
-                              style: TextStyle(
-                                color: isSelected ? Colors.white : Colors.black,
-
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-
-                  const SizedBox(height: 30),
-
-                  /// ======================
-                  /// POPULAR TITLE
-                  /// ======================
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-
-                      children: [
-                        const Text(
-                          "Popular Foods",
+                      const SizedBox(height: 25),
+                      const Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          "Recommended",
                           style: TextStyle(
-                            fontSize: 23,
+                            fontSize: 20,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 6,
-                          ),
-
-                          decoration: BoxDecoration(
-                            color: Colors.orange.withOpacity(0.1),
-
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-
-                          child: Text(
-                            "${filteredFoods.length} Foods",
-
-                            style: const TextStyle(
-                              color: Colors.orange,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  /// ======================
-                  /// EMPTY SEARCH
-                  /// ======================
-                  if (filteredFoods.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 80),
-
-                      child: Center(
-                        child: Column(
-                          children: [
-                            Icon(
-                              Icons.search_off,
-                              size: 80,
-                              color: Colors.orange,
-                            ),
-
-                            SizedBox(height: 20),
-
-                            Text(
-                              "Food Not Found",
-                              style: TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-
-                            SizedBox(height: 10),
-
-                            Text(
-                              "Try searching another food",
-                              style: TextStyle(color: Colors.grey),
-                            ),
-                          ],
-                        ),
                       ),
-                    ),
-
-                  /// ======================
-                  /// FOOD LIST
-                  /// ======================
-                  if (filteredFoods.isNotEmpty)
-                    ListView.builder(
-                      shrinkWrap: true,
-
-                      physics: const NeverScrollableScrollPhysics(),
-
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-
-                      itemCount: filteredFoods.length,
-
-                      itemBuilder: (context, index) {
-                        var food = filteredFoods[index];
-
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 18),
-
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(22),
-
-                            onTap: () {
-                              Navigator.push(
-                                context,
-
-                                MaterialPageRoute(
-                                  builder: (_) => DetailScreen(food: food),
-                                ),
-                              );
-                            },
-
-                            child: FoodCard(food: food),
-                          ),
-                        );
-                      },
-                    ),
-
-                  const SizedBox(height: 100),
-                ],
+                      const SizedBox(height: 10),
+                    ],
+                  ),
+                ),
               ),
-            );
-          },
+
+              // 3. List Restoran dari Firestore
+              SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) => _buildFoodItem(filteredFoods[index]),
+                  childCount: filteredFoods.length,
+                ),
+              ),
+              const SliverToBoxAdapter(child: SizedBox(height: 30)),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  // Komponen Kategori Clickable
+  Widget _buildCategoryCard(CategoryModel category) {
+    return InkWell(
+      onTap: () {
+        // Tambahkan aksi navigasi di sini
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) =>
+                CategoryDetailScreen(categoryTitle: category.title),
+          ),
+        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Membuka ${category.title}")));
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8),
+          ],
+        ),
+        child: Column(
+          children: [
+            Expanded(
+              child: ClipRRect(
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(20),
+                ),
+                child: Image.network(
+                  category.image,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: Text(
+                category.title,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Komponen Item Makanan (ListTile)
+  Widget _buildFoodItem(QueryDocumentSnapshot food) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.all(10),
+        leading: Hero(
+          tag: food.id, // ID Unik dari Firestore
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Image.network(
+              food['image'],
+              width: 60,
+              height: 60,
+              fit: BoxFit.cover,
+            ),
+          ),
+        ),
+        title: Text(
+          food['name'],
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        subtitle: Text(food['category']),
+        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => DetailScreen(food: food)),
         ),
       ),
     );

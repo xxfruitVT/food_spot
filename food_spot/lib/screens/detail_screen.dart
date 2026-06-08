@@ -54,24 +54,26 @@ class DetailScreen extends StatelessWidget {
 
               background: Stack(
                 fit: StackFit.expand,
+                // ... di dalam SliverAppBar -> flexibleSpace -> background -> Stack:
                 children: [
-                  CachedNetworkImage(
-                    imageUrl: food['image'],
-                    fit: BoxFit.cover,
-
-                    placeholder: (context, url) =>
-                        const Center(child: CircularProgressIndicator()),
-
-                    errorWidget: (context, url, error) => Container(
-                      color: Colors.grey.shade300,
-                      child: const Icon(
-                        Icons.image_not_supported,
-                        size: 60,
-                        color: Colors.grey,
+                  Hero(
+                    tag: food.id, // Harus SAMA PERSIS dengan tag di HomeScreen
+                    child: CachedNetworkImage(
+                      imageUrl: food['image'],
+                      fit: BoxFit.cover,
+                      placeholder: (context, url) =>
+                          const Center(child: CircularProgressIndicator()),
+                      errorWidget: (context, url, error) => Container(
+                        color: Colors.grey.shade300,
+                        child: const Icon(
+                          Icons.image_not_supported,
+                          size: 60,
+                          color: Colors.grey,
+                        ),
                       ),
                     ),
                   ),
-
+                  // Overlay gradient agar teks terbaca
                   Container(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(

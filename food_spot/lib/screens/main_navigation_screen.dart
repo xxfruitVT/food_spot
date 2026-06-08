@@ -58,6 +58,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                 ],
               ),
               child: FloatingActionButton(
+                heroTag:
+                    "main_nav_fab", // Tambahkan heroTag untuk menghindari konflik dengan FAB lain
                 onPressed: () {
                   setState(() {
                     currentIndex = 3; // Mengarah ke AddFoodScreen
