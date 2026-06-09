@@ -1,93 +1,94 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'detail_screen.dart'; // Import untuk navigasi ke Detail Makanan
+import 'detail_screen.dart';
 
 class CategoryDetailScreen extends StatelessWidget {
-  final String categoryTitle; // Menerima judul kategori (misal: "Restaurants")
+  final String categoryTitle;
 
   const CategoryDetailScreen({super.key, required this.categoryTitle});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF9F9F9),
+      backgroundColor: const Color(0xFFF6F7FB),
+
       body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('foods') // Sesuaikan dengan nama collection Anda
-            .where('category', isEqualTo: categoryTitle)
-            .snapshots(),
+        // 🔥 FIX COLLECTION NAME
+        stream: FirebaseFirestore.instance.collection('food_spots').snapshots(),
+
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return const Center(
-              child: Text("Tidak ada data untuk kategori ini."),
+
+          final allFoods = snapshot.data!.docs;
+
+          // 🔥 FIX FILTER (CASE INSENSITIVE)
+          final foods = allFoods.where((food) {
+            final data = food.data() as Map<String, dynamic>;
+
+            final category = (data['category'] ?? '')
+                .toString()
+                .toLowerCase()
+                .trim();
+
+            final selected = categoryTitle.toLowerCase().trim();
+
+            return category == selected;
+          }).toList();
+
+          if (foods.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: const [
+                  Icon(Icons.restaurant_menu, size: 80, color: Colors.grey),
+                  SizedBox(height: 10),
+                  Text("Tidak ada data di kategori ini"),
+                ],
+              ),
             );
           }
-
-          var foods = snapshot.data!.docs;
 
           return CustomScrollView(
             slivers: [
               SliverAppBar(
-                expandedHeight: 150,
                 pinned: true,
+                expandedHeight: 160,
                 flexibleSpace: FlexibleSpaceBar(
-                  title: Text(
-                    categoryTitle,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                  title: Text(categoryTitle),
+                  background: Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Colors.orange, Colors.deepOrange],
+                      ),
                     ),
                   ),
-                  background: Container(color: Colors.orange),
                 ),
               ),
+
               SliverList(
                 delegate: SliverChildBuilderDelegate((context, index) {
-                  var food = foods[index];
-                  return _buildFoodItem(context, food);
+                  final food = foods[index];
+
+                  return ListTile(
+                    leading: Image.network(food['image'], width: 60),
+                    title: Text(food['name']),
+                    subtitle: Text(food['category']),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => DetailScreen(food: food),
+                        ),
+                      );
+                    },
+                  );
                 }, childCount: foods.length),
               ),
             ],
           );
         },
-      ),
-    );
-  }
-
-  Widget _buildFoodItem(BuildContext context, QueryDocumentSnapshot food) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10),
-        ],
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.all(10),
-        leading: ClipRRect(
-          borderRadius: BorderRadius.circular(10),
-          child: Image.network(
-            food['image'],
-            width: 60,
-            height: 60,
-            fit: BoxFit.cover,
-          ),
-        ),
-        title: Text(
-          food['name'],
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        subtitle: Text("Rating: ${food['rating']}"),
-        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => DetailScreen(food: food)),
-        ),
       ),
     );
   }

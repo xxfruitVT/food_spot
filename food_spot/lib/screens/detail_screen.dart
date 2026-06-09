@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:food_spot/services/favorite_service.dart';
@@ -57,21 +58,24 @@ class DetailScreen extends StatelessWidget {
                 // ... di dalam SliverAppBar -> flexibleSpace -> background -> Stack:
                 children: [
                   Hero(
-                    tag: food.id, // Harus SAMA PERSIS dengan tag di HomeScreen
-                    child: CachedNetworkImage(
-                      imageUrl: food['image'],
-                      fit: BoxFit.cover,
-                      placeholder: (context, url) =>
-                          const Center(child: CircularProgressIndicator()),
-                      errorWidget: (context, url, error) => Container(
-                        color: Colors.grey.shade300,
-                        child: const Icon(
-                          Icons.image_not_supported,
-                          size: 60,
-                          color: Colors.grey,
-                        ),
-                      ),
-                    ),
+                    tag: food.id,
+                    child: food['image'].toString().startsWith('http')
+                        ? CachedNetworkImage(
+                            imageUrl: food['image'],
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => const Center(
+                              child: CircularProgressIndicator(),
+                            ),
+                            errorWidget: (context, url, error) => Container(
+                              color: Colors.grey.shade300,
+                              child: const Icon(
+                                Icons.image_not_supported,
+                                size: 60,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          )
+                        : Image.file(File(food['image']), fit: BoxFit.cover),
                   ),
                   // Overlay gradient agar teks terbaca
                   Container(

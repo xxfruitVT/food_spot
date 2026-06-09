@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:food_spot/screens/main_navigation_screen.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/firestore_service.dart';
 
@@ -11,12 +12,10 @@ class AddFoodScreen extends StatefulWidget {
 }
 
 class _AddFoodScreenState extends State<AddFoodScreen> {
-  /// CONTROLLERS
   final nameController = TextEditingController();
   final descController = TextEditingController();
   final categoryController = TextEditingController();
 
-  /// STATE VARIABLES
   double rating = 5.0;
   File? imageFile;
   final picker = ImagePicker();
@@ -30,11 +29,13 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
     super.dispose();
   }
 
-  /// IMAGE PICKER LOGIC
   Future<void> pickImage(ImageSource source) async {
     final picked = await picker.pickImage(source: source, imageQuality: 80);
+
     if (picked != null) {
-      setState(() => imageFile = File(picked.path));
+      setState(() {
+        imageFile = File(picked.path);
+      });
     }
   }
 
@@ -86,39 +87,58 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
     );
   }
 
-  /// UPLOAD LOGIC
+  // =========================================================
+  // 🔥 FIX UTAMA ADA DI SINI
+  // =========================================================
   Future<void> uploadFood() async {
     if (nameController.text.isEmpty ||
         descController.text.isEmpty ||
-        categoryController.text.isEmpty) {
+        categoryController.text.isEmpty ||
+        imageFile == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("Please fill all fields"),
+          content: Text("Please fill all fields and upload image"),
           backgroundColor: Colors.red,
         ),
       );
       return;
     }
 
-    setState(() => isLoading = true);
+    setState(() {
+      isLoading = true;
+    });
 
     try {
       final firestore = FirestoreService();
+
       await firestore.addFood(
         name: nameController.text.trim(),
         category: categoryController.text.trim(),
         description: descController.text.trim(),
-        image: "https://picsum.photos/300",
+        image: imageFile!.path,
         rating: rating,
       );
+
       if (!mounted) return;
-      Navigator.pop(context);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Recommendation added successfully")),
+      );
+
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const MainNavigationScreen()),
+        (route) => false,
+      );
     } catch (e) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(e.toString())));
     }
-    setState(() => isLoading = false);
+
+    setState(() {
+      isLoading = false;
+    });
   }
 
   @override
@@ -139,7 +159,6 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Image Preview
             Center(
               child: GestureDetector(
                 onTap: showImagePicker,
@@ -163,15 +182,16 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
                               size: 50,
                               color: Colors.orange,
                             ),
+                            SizedBox(height: 10),
                             Text("Tap to upload"),
                           ],
                         ),
                 ),
               ),
             ),
+
             const SizedBox(height: 30),
 
-            // Input Fields
             _buildTextField(nameController, "Place Name", Icons.restaurant),
             _buildTextField(categoryController, "Category", Icons.category),
             _buildTextField(
@@ -181,7 +201,6 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
               maxLines: 3,
             ),
 
-            // Star Rating
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 20),
               child: Text(
@@ -189,6 +208,7 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
             ),
+
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: List.generate(5, (index) {
@@ -198,14 +218,17 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
                     color: Colors.amber,
                     size: 45,
                   ),
-                  onPressed: () => setState(() => rating = index + 1.0),
+                  onPressed: () {
+                    setState(() {
+                      rating = index + 1.0;
+                    });
+                  },
                 );
               }),
             ),
 
             const SizedBox(height: 30),
 
-            // Upload Button
             SizedBox(
               width: double.infinity,
               height: 55,

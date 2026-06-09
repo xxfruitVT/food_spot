@@ -1,10 +1,11 @@
+import 'dart:async';
+import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:food_spot/screens/category_detail_screen.dart';
 import '../services/firestore_service.dart';
 import 'detail_screen.dart';
 
-// Model untuk data kategori
 class CategoryModel {
   final String title;
   final String description;
@@ -27,140 +28,176 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final service = FirestoreService();
   final TextEditingController searchController = TextEditingController();
-  String searchText = "";
 
-  // Data kategori nyata
+  String searchText = "";
+  List<QueryDocumentSnapshot> allFoods = [];
+
+  Timer? _debounce;
+
   final List<CategoryModel> categories = [
     CategoryModel(
-      title: "Restaurants",
-      description: "Temukan tempat makan terbaik",
+      title: "restaurants",
+      description: "Best places to eat",
       image: "https://images.unsplash.com/photo-1552566626-52f8b828add9",
     ),
     CategoryModel(
       title: "Bars & Cafe",
-      description: "Tempat nongkrong favorit",
+      description: "Hangout spots",
       image: "https://images.unsplash.com/photo-1514933651103-005eec06c04b",
     ),
   ];
 
+  // ================= SEARCH LOGIC (UPDATED) =================
+  bool matchesSearch(QueryDocumentSnapshot food) {
+    final query = searchText.toLowerCase();
+
+    final name = food['name'].toString().toLowerCase();
+    final category = food['category'].toString().toLowerCase();
+    final desc = food['description'].toString().toLowerCase();
+
+    return name.contains(query) ||
+        category.contains(query) ||
+        desc.contains(query);
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    searchController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF9F9F9),
+      backgroundColor: const Color(0xFFF6F7FB),
+
       body: StreamBuilder<QuerySnapshot>(
         stream: service.getFoods(),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+          if (snapshot.hasData) {
+            allFoods = snapshot.data!.docs;
           }
 
-          var foods = snapshot.data?.docs ?? [];
-          var filteredFoods = foods.where((food) {
-            String name = food['name'].toString().toLowerCase();
-            return name.contains(searchText.toLowerCase());
-          }).toList();
+          // FILTER SEARCH (SMOOTH + MULTI FIELD)
+          var filteredFoods = allFoods.where(matchesSearch).toList();
 
           return CustomScrollView(
             slivers: [
-              // 1. Header Elegan dengan SliverAppBar
+              // ================= APP BAR =================
               SliverAppBar(
-                expandedHeight: 200,
+                expandedHeight: 180,
                 pinned: true,
-                centerTitle: true,
+                backgroundColor: Colors.orange,
                 flexibleSpace: FlexibleSpaceBar(
-                  centerTitle: true,
-                  title: Text(
+                  title: const Text(
                     "Home",
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      // PENYEBAB BUREM: Menggunakan warna dengan opasitas (Misalnya, putih kusam)
-                      color: Colors.white.withOpacity(0.6), // <--- Ubah di sini
+                      color: Colors.white,
                     ),
                   ),
-                  background: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      Image.network(
-                        "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4",
-                        fit: BoxFit.cover,
+                  background: Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Colors.orange, Colors.deepOrange],
                       ),
-                      Container(color: Colors.black.withOpacity(0.3)),
-                    ],
+                    ),
                   ),
                 ),
               ),
 
-              // 2. Konten Utama
+              // ================= BODY =================
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.all(16.0),
+                  padding: const EdgeInsets.all(18),
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Search Bar
+                      // ================= SEARCH BAR (FIXED + SMOOTH) =================
                       Container(
                         decoration: BoxDecoration(
                           color: Colors.white,
-                          borderRadius: BorderRadius.circular(15),
+                          borderRadius: BorderRadius.circular(16),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              blurRadius: 10,
+                              color: Colors.black.withOpacity(0.06),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
                             ),
                           ],
                         ),
                         child: TextField(
                           controller: searchController,
-                          onChanged: (val) => setState(() => searchText = val),
+                          onChanged: (val) {
+                            if (_debounce?.isActive ?? false) {
+                              _debounce!.cancel();
+                            }
+
+                            _debounce = Timer(
+                              const Duration(milliseconds: 300),
+                              () {
+                                setState(() {
+                                  searchText = val;
+                                });
+                              },
+                            );
+                          },
                           decoration: const InputDecoration(
-                            hintText: "Cari makanan atau resto...",
-                            prefixIcon: Icon(Icons.search, color: Colors.cyan),
+                            hintText: "Search food, restaurant...",
+                            prefixIcon: Icon(Icons.search),
                             border: InputBorder.none,
-                            contentPadding: EdgeInsets.symmetric(vertical: 15),
+                            contentPadding: EdgeInsets.all(16),
                           ),
                         ),
                       ),
-                      const SizedBox(height: 25),
 
-                      // Grid Kategori
-                      GridView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: categories.length,
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 2,
-                              childAspectRatio: 0.8,
-                              crossAxisSpacing: 15,
-                            ),
-                        itemBuilder: (context, index) =>
-                            _buildCategoryCard(categories[index]),
-                      ),
+                      const SizedBox(height: 20),
 
-                      const SizedBox(height: 25),
-                      const Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          "Recommended",
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
+                      const Text(
+                        "Categories",
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
-                      const SizedBox(height: 10),
+
+                      const SizedBox(height: 12),
+
+                      SizedBox(
+                        height: 140,
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: categories.length,
+                          itemBuilder: (context, index) {
+                            final c = categories[index];
+                            return _categoryCard(c);
+                          },
+                        ),
+                      ),
+
+                      const SizedBox(height: 25),
+
+                      const Text(
+                        "Recommended",
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ],
                   ),
                 ),
               ),
 
-              // 3. List Restoran dari Firestore
+              // ================= FOOD LIST =================
               SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) => _buildFoodItem(filteredFoods[index]),
-                  childCount: filteredFoods.length,
-                ),
+                delegate: SliverChildBuilderDelegate((context, index) {
+                  return _foodCard(filteredFoods[index]);
+                }, childCount: filteredFoods.length),
               ),
-              const SliverToBoxAdapter(child: SizedBox(height: 30)),
+
+              const SliverToBoxAdapter(child: SizedBox(height: 20)),
             ],
           );
         },
@@ -168,89 +205,99 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Komponen Kategori Clickable
-  Widget _buildCategoryCard(CategoryModel category) {
-    return InkWell(
+  // ================= CATEGORY CARD =================
+  Widget _categoryCard(CategoryModel c) {
+    return GestureDetector(
       onTap: () {
-        // Tambahkan aksi navigasi di sini
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) =>
-                CategoryDetailScreen(categoryTitle: category.title),
+            builder: (_) =>
+                CategoryDetailScreen(categoryTitle: c.title.toLowerCase()),
           ),
         );
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("Membuka ${category.title}")));
       },
       child: Container(
+        width: 140,
+        margin: const EdgeInsets.only(right: 12),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8),
-          ],
+          borderRadius: BorderRadius.circular(18),
+          image: DecorationImage(
+            image: NetworkImage(c.image),
+            fit: BoxFit.cover,
+          ),
         ),
-        child: Column(
-          children: [
-            Expanded(
-              child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(20),
-                ),
-                child: Image.network(
-                  category.image,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                ),
-              ),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            gradient: LinearGradient(
+              begin: Alignment.bottomCenter,
+              end: Alignment.topCenter,
+              colors: [Colors.black.withOpacity(0.6), Colors.transparent],
             ),
-            Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: Text(
-                category.title,
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
+          ),
+          alignment: Alignment.bottomLeft,
+          padding: const EdgeInsets.all(10),
+          child: Text(
+            c.title,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  // Komponen Item Makanan (ListTile)
-  Widget _buildFoodItem(QueryDocumentSnapshot food) {
+  // ================= FOOD CARD =================
+  Widget _foodCard(QueryDocumentSnapshot food) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: ListTile(
-        contentPadding: const EdgeInsets.all(10),
-        leading: Hero(
-          tag: food.id, // ID Unik dari Firestore
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: Image.network(
-              food['image'],
-              width: 60,
-              height: 60,
-              fit: BoxFit.cover,
-            ),
+        contentPadding: EdgeInsets.zero,
+
+        leading: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: SizedBox(
+            width: 60,
+            height: 60,
+            child: food['image'].toString().startsWith("http")
+                ? Image.network(food['image'], fit: BoxFit.cover)
+                : Image.file(File(food['image']), fit: BoxFit.cover),
           ),
         ),
+
         title: Text(
           food['name'],
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
-        subtitle: Text(food['category']),
-        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => DetailScreen(food: food)),
+
+        subtitle: Text(
+          food['category'],
+          style: TextStyle(color: Colors.grey.shade600),
         ),
+
+        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => DetailScreen(food: food)),
+          );
+        },
       ),
     );
   }
