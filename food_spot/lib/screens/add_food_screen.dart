@@ -14,18 +14,21 @@ class AddFoodScreen extends StatefulWidget {
 class _AddFoodScreenState extends State<AddFoodScreen> {
   final nameController = TextEditingController();
   final descController = TextEditingController();
-  final categoryController = TextEditingController();
 
   double rating = 5.0;
   File? imageFile;
   final picker = ImagePicker();
   bool isLoading = false;
 
+  // ✅ CATEGORY DROPDOWN
+  String? selectedCategory;
+
+  final List<String> categories = ["restaurants", "bars & cafe"];
+
   @override
   void dispose() {
     nameController.dispose();
     descController.dispose();
-    categoryController.dispose();
     super.dispose();
   }
 
@@ -87,33 +90,29 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
     );
   }
 
-  // =========================================================
-  // 🔥 FIX UTAMA ADA DI SINI
-  // =========================================================
+  // ================= UPLOAD =================
   Future<void> uploadFood() async {
     if (nameController.text.isEmpty ||
         descController.text.isEmpty ||
-        categoryController.text.isEmpty ||
+        selectedCategory == null ||
         imageFile == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("Please fill all fields and upload image"),
+          content: Text("Please fill all fields"),
           backgroundColor: Colors.red,
         ),
       );
       return;
     }
 
-    setState(() {
-      isLoading = true;
-    });
+    setState(() => isLoading = true);
 
     try {
       final firestore = FirestoreService();
 
       await firestore.addFood(
         name: nameController.text.trim(),
-        category: categoryController.text.trim(),
+        category: selectedCategory!.trim(),
         description: descController.text.trim(),
         image: imageFile!.path,
         rating: rating,
@@ -121,13 +120,13 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Recommendation added successfully")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Successfully added")));
 
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (context) => const MainNavigationScreen()),
+        MaterialPageRoute(builder: (_) => const MainNavigationScreen()),
         (route) => false,
       );
     } catch (e) {
@@ -136,64 +135,65 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
       ).showSnackBar(SnackBar(content: Text(e.toString())));
     }
 
-    setState(() {
-      isLoading = false;
-    });
+    setState(() => isLoading = false);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
+
       appBar: AppBar(
         title: const Text(
-          "Add New Recommendation",
+          "Add Recommendation",
           style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black),
         ),
-        elevation: 0,
         backgroundColor: Colors.white,
+        elevation: 0,
         iconTheme: const IconThemeData(color: Colors.black),
       ),
+
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Center(
-              child: GestureDetector(
-                onTap: showImagePicker,
-                child: Container(
-                  height: 200,
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: imageFile != null
-                      ? ClipRRect(
-                          borderRadius: BorderRadius.circular(20),
-                          child: Image.file(imageFile!, fit: BoxFit.cover),
-                        )
-                      : const Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.add_a_photo,
-                              size: 50,
-                              color: Colors.orange,
-                            ),
-                            SizedBox(height: 10),
-                            Text("Tap to upload"),
-                          ],
-                        ),
+            // ================= IMAGE =================
+            GestureDetector(
+              onTap: showImagePicker,
+              child: Container(
+                height: 200,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(20),
                 ),
+                child: imageFile != null
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: Image.file(imageFile!, fit: BoxFit.cover),
+                      )
+                    : const Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.add_a_photo,
+                            size: 50,
+                            color: Colors.orange,
+                          ),
+                          SizedBox(height: 10),
+                          Text("Tap to upload image"),
+                        ],
+                      ),
               ),
             ),
 
-            const SizedBox(height: 30),
+            const SizedBox(height: 25),
 
             _buildTextField(nameController, "Place Name", Icons.restaurant),
-            _buildTextField(categoryController, "Category", Icons.category),
+
+            // ================= DROPDOWN CATEGORY =================
+            _buildDropdown(),
+
             _buildTextField(
               descController,
               "Description",
@@ -201,12 +201,11 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
               maxLines: 3,
             ),
 
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 20),
-              child: Text(
-                "Rate this place",
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
+            const SizedBox(height: 10),
+
+            const Text(
+              "Rate this place",
+              style: TextStyle(fontWeight: FontWeight.bold),
             ),
 
             Row(
@@ -216,18 +215,16 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
                   icon: Icon(
                     index < rating ? Icons.star : Icons.star_border,
                     color: Colors.amber,
-                    size: 45,
+                    size: 40,
                   ),
                   onPressed: () {
-                    setState(() {
-                      rating = index + 1.0;
-                    });
+                    setState(() => rating = index + 1.0);
                   },
                 );
               }),
             ),
 
-            const SizedBox(height: 30),
+            const SizedBox(height: 20),
 
             SizedBox(
               width: double.infinity,
@@ -241,12 +238,40 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
                   ),
                 ),
                 child: Text(
-                  isLoading ? "Saving..." : "Save Recommendation",
-                  style: const TextStyle(color: Colors.white, fontSize: 16),
+                  isLoading ? "Saving..." : "Save",
+                  style: const TextStyle(color: Colors.white),
                 ),
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  // ================= DROPDOWN WIDGET =================
+  Widget _buildDropdown() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 15),
+      child: DropdownButtonFormField<String>(
+        value: selectedCategory,
+        items: categories.map((e) {
+          return DropdownMenuItem(value: e, child: Text(e));
+        }).toList(),
+        onChanged: (value) {
+          setState(() {
+            selectedCategory = value;
+          });
+        },
+        decoration: InputDecoration(
+          labelText: "Category",
+          prefixIcon: const Icon(Icons.category, color: Colors.orange),
+          filled: true,
+          fillColor: Colors.grey.shade50,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(15),
+            borderSide: BorderSide.none,
+          ),
         ),
       ),
     );
@@ -266,12 +291,12 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
         decoration: InputDecoration(
           labelText: label,
           prefixIcon: Icon(icon, color: Colors.orange),
+          filled: true,
+          fillColor: Colors.grey.shade50,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(15),
             borderSide: BorderSide.none,
           ),
-          filled: true,
-          fillColor: Colors.grey.shade50,
         ),
       ),
     );

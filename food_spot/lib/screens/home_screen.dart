@@ -105,7 +105,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(height: 6),
 
                       const Text(
-                        "Find your favorite food",
+                        "Find your favorite Place",
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 22,

@@ -1,20 +1,32 @@
-class FavoriteService {
-  static final List<dynamic> _favorites = [];
+import 'package:flutter/material.dart';
 
-  static List<dynamic> get favorites => _favorites;
+class FavoriteService {
+  static final ValueNotifier<List<dynamic>> favorites =
+      ValueNotifier<List<dynamic>>([]);
 
   static void addFavorite(dynamic food) {
-    // hindari double data
-    if (!_favorites.any((item) => item['name'] == food['name'])) {
-      _favorites.add(food);
+    final list = List<dynamic>.from(favorites.value);
+
+    // cegah duplicate (pakai id kalau ada)
+    final exists = list.any((item) => item['id'] == food['id']);
+
+    if (!exists) {
+      list.add(food);
+      favorites.value = list;
     }
   }
 
   static void removeFavorite(dynamic food) {
-    _favorites.removeWhere((item) => item['name'] == food['name']);
+    final list = List<dynamic>.from(favorites.value);
+
+    list.removeWhere(
+      (item) => item['name'] == food['name'] && item['image'] == food['image'],
+    );
+
+    favorites.value = list;
   }
 
-  static bool isFavorite(dynamic food) {
-    return _favorites.any((item) => item['name'] == food['name']);
+  static void clearAll() {
+    favorites.value = [];
   }
 }
