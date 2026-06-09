@@ -31,7 +31,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   String searchText = "";
   List<QueryDocumentSnapshot> allFoods = [];
-
   Timer? _debounce;
 
   final List<CategoryModel> categories = [
@@ -41,23 +40,20 @@ class _HomeScreenState extends State<HomeScreen> {
       image: "https://images.unsplash.com/photo-1552566626-52f8b828add9",
     ),
     CategoryModel(
-      title: "Bars & Cafe",
+      title: "bars & cafe",
       description: "Hangout spots",
       image: "https://images.unsplash.com/photo-1514933651103-005eec06c04b",
     ),
   ];
 
-  // ================= SEARCH LOGIC (UPDATED) =================
   bool matchesSearch(QueryDocumentSnapshot food) {
-    final query = searchText.toLowerCase();
+    final q = searchText.toLowerCase();
 
     final name = food['name'].toString().toLowerCase();
     final category = food['category'].toString().toLowerCase();
     final desc = food['description'].toString().toLowerCase();
 
-    return name.contains(query) ||
-        category.contains(query) ||
-        desc.contains(query);
+    return name.contains(q) || category.contains(q) || desc.contains(q);
   }
 
   @override
@@ -79,53 +75,52 @@ class _HomeScreenState extends State<HomeScreen> {
             allFoods = snapshot.data!.docs;
           }
 
-          // FILTER SEARCH (SMOOTH + MULTI FIELD)
-          var filteredFoods = allFoods.where(matchesSearch).toList();
+          final filteredFoods = allFoods.where(matchesSearch).toList();
 
           return CustomScrollView(
             slivers: [
-              // ================= APP BAR =================
-              SliverAppBar(
-                expandedHeight: 180,
-                pinned: true,
-                backgroundColor: Colors.orange,
-                flexibleSpace: FlexibleSpaceBar(
-                  title: const Text(
-                    "Home",
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                  background: Container(
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [Colors.orange, Colors.deepOrange],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-
-              // ================= BODY =================
+              // ================= HERO HEADER =================
               SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.all(18),
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(20, 60, 20, 25),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.only(
+                      bottomLeft: Radius.circular(30),
+                      bottomRight: Radius.circular(30),
+                    ),
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // ================= SEARCH BAR (FIXED + SMOOTH) =================
+                      const Text(
+                        "Hi 👋",
+                        style: TextStyle(color: Colors.white70, fontSize: 16),
+                      ),
+
+                      const SizedBox(height: 6),
+
+                      const Text(
+                        "Find your favorite food",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // SEARCH BAR
                       Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
                         decoration: BoxDecoration(
                           color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.06),
-                              blurRadius: 12,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
+                          borderRadius: BorderRadius.circular(14),
                         ),
                         child: TextField(
                           controller: searchController,
@@ -135,25 +130,33 @@ class _HomeScreenState extends State<HomeScreen> {
                             }
 
                             _debounce = Timer(
-                              const Duration(milliseconds: 300),
-                              () {
-                                setState(() {
-                                  searchText = val;
-                                });
-                              },
+                              const Duration(milliseconds: 250),
+                              () => setState(() {
+                                searchText = val;
+                              }),
                             );
                           },
                           decoration: const InputDecoration(
-                            hintText: "Search food, restaurant...",
-                            prefixIcon: Icon(Icons.search),
+                            hintText: "Search food...",
                             border: InputBorder.none,
-                            contentPadding: EdgeInsets.all(16),
+                            icon: Icon(Icons.search),
                           ),
                         ),
                       ),
+                    ],
+                  ),
+                ),
+              ),
 
-                      const SizedBox(height: 20),
+              const SliverToBoxAdapter(child: SizedBox(height: 20)),
 
+              // ================= CATEGORY =================
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       const Text(
                         "Categories",
                         style: TextStyle(
@@ -165,13 +168,12 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(height: 12),
 
                       SizedBox(
-                        height: 140,
+                        height: 120,
                         child: ListView.builder(
                           scrollDirection: Axis.horizontal,
                           itemCount: categories.length,
                           itemBuilder: (context, index) {
-                            final c = categories[index];
-                            return _categoryCard(c);
+                            return _categoryCard(categories[index]);
                           },
                         ),
                       ),
@@ -190,14 +192,15 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
+              const SliverToBoxAdapter(child: SizedBox(height: 10)),
+
               // ================= FOOD LIST =================
               SliverList(
-                delegate: SliverChildBuilderDelegate((context, index) {
-                  return _foodCard(filteredFoods[index]);
-                }, childCount: filteredFoods.length),
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) => _foodCard(filteredFoods[index]),
+                  childCount: filteredFoods.length,
+                ),
               ),
-
-              const SliverToBoxAdapter(child: SizedBox(height: 20)),
             ],
           );
         },
@@ -221,7 +224,7 @@ class _HomeScreenState extends State<HomeScreen> {
         width: 140,
         margin: const EdgeInsets.only(right: 12),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(16),
           image: DecorationImage(
             image: NetworkImage(c.image),
             fit: BoxFit.cover,
@@ -229,15 +232,15 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         child: Container(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(16),
             gradient: LinearGradient(
               begin: Alignment.bottomCenter,
               end: Alignment.topCenter,
-              colors: [Colors.black.withOpacity(0.6), Colors.transparent],
+              colors: [Colors.black.withOpacity(0.7), Colors.transparent],
             ),
           ),
-          alignment: Alignment.bottomLeft,
           padding: const EdgeInsets.all(10),
+          alignment: Alignment.bottomLeft,
           child: Text(
             c.title,
             style: const TextStyle(
@@ -253,18 +256,11 @@ class _HomeScreenState extends State<HomeScreen> {
   // ================= FOOD CARD =================
   Widget _foodCard(QueryDocumentSnapshot food) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
       ),
       child: ListTile(
         contentPadding: EdgeInsets.zero,
@@ -285,12 +281,7 @@ class _HomeScreenState extends State<HomeScreen> {
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
 
-        subtitle: Text(
-          food['category'],
-          style: TextStyle(color: Colors.grey.shade600),
-        ),
-
-        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+        subtitle: Text(food['category']),
 
         onTap: () {
           Navigator.push(
